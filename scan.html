@@ -1,51 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-  <title>Scan Barcode</title>
-  <script src="https://unpkg.com/@zxing/library@latest"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scan Barcode dan Simpan ke Google Sheets</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    #reader { width: 300px; margin-bottom: 20px; }
+    table, th, td { border: 1px solid black; border-collapse: collapse; padding: 5px; }
+    button { margin: 10px 5px; padding: 8px 12px; }
+  </style>
 </head>
 <body>
-  <h2>Scan Barcode</h2>
-  <video id="video" width="300" height="200" style="border:1px solid black;"></video>
-  <p>Hasil: <span id="result">-</span></p>
-  <p id="debug" style="color:red;"></p>
+  <h2>Scan Barcode & Simpan Otomatis</h2>
+  <div id="reader"></div>
+  <button onclick="downloadCSV()">Unduh CSV</button>
+  <h3>Data Tersimpan:</h3>
+  <table id="data-table">
+    <thead><tr><th>No</th><th>Barcode</th><th>Waktu</th></tr></thead>
+    <tbody id="table-body"></tbody>
+  </table>
 
   <script>
-    const codeReader = new ZXing.BrowserMultiFormatReader();
-    const videoElement = document.getElementById('video');
-    const debug = document.getElementById('debug');
-
+    const scannedData = [];
     const webAppUrl = "https://script.google.com/macros/s/AKfycby71RymofSLqHiUforJ6rLN9q3HHjvVKMOkNWf6pRgJKBzNbE8zZmqQAgWXbsfj1aTB/exec";
 
-    function kirimKeSpreadsheet(data) {
-      fetch(webAppUrl + "?barcode=" + encodeURIComponent(data), {
-        method: "POST",
-        mode: "no-cors"
-      }).then(() => {
-        console.log("Terkirim:", data);
-      }).catch(err => {
-        console.error("Gagal kirim:", err);
-        debug.textContent = "❌ Gagal kirim data ke spreadsheet.";
+    function onScanSuccess(decodedText) {
+      const now = new Date().toLocaleString();
+      // Cek duplikat (opsional)
+      if (scannedData.some(item => item.code === decodedText)) return;
+
+      scannedData.push({ code: decodedText, time: now });
+      updateTable();
+      postToSheet(decodedText, now);
+    }
+
+    function updateTable() {
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = "";
+      scannedData.forEach((item, index) => {
+        tbody.innerHTML += `<tr><td>${index + 1}</td><td>${item.code}</td><td>${item.time}</td></tr>`;
       });
     }
 
-    codeReader.listVideoInputDevices().then(devices => {
-      if (!devices.length) {
-        debug.textContent = "❌ Kamera tidak ditemukan";
-        return;
-      }
-      const camId = devices[0].deviceId;
-      codeReader.decodeFromVideoDevice(camId, videoElement, (result, err) => {
-        if (result) {
-          const text = result.text;
-          document.getElementById("result").textContent = text;
-          kirimKeSpreadsheet(text);
-        }
+    function postToSheet(code, time) {
+      fetch(webAppUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, time })
+      }).catch(err => console.error("Gagal kirim ke Sheet:", err));
+    }
+
+    function downloadCSV() {
+      let csv = "No,Barcode,Waktu\n";
+      scannedData.forEach((item, index) => {
+        csv += `${index + 1},"${item.code}","${item.time}"\n`;
       });
-    }).catch(err => {
-      console.error(err);
-      debug.textContent = "⚠️ Gagal mendeteksi kamera";
-    });
+      const blob = new Blob([csv], { type: "text/csv" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "hasil_scan.csv";
+      link.click();
+    }
+
+    // Jalankan scanner
+    new Html5Qrcode("reader").start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      onScanSuccess
+    );
   </script>
 </body>
 </html>
