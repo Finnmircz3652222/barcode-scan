@@ -1,75 +1,94 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Scan Barcode dan Simpan ke Google Sheets</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Scan Barcode</title>
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
   <style>
-    body { font-family: Arial; padding: 20px; }
-    #reader { width: 300px; margin-bottom: 20px; }
-    table, th, td { border: 1px solid black; border-collapse: collapse; padding: 5px; }
-    button { margin: 10px 5px; padding: 8px 12px; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1 {
+      color: #2c3e50;
+      font-size: 24px;
+    }
+
+    video {
+      width: 90%;
+      max-width: 480px;
+      border: 4px solid #3498db;
+      border-radius: 12px;
+      margin: 20px 0;
+    }
+
+    #result {
+      font-size: 1.6em;
+      color: #2c3e50;
+      margin: 10px 0;
+      font-weight: bold;
+    }
+
+    #debug {
+      color: #e74c3c;
+      margin-top: 10px;
+    }
+
+    footer {
+      font-size: 0.9em;
+      margin-top: 30px;
+      color: #888;
+    }
   </style>
 </head>
 <body>
-  <h2>Scan Barcode & Simpan Otomatis</h2>
-  <div id="reader"></div>
-  <button onclick="downloadCSV()">Unduh CSV</button>
-  <h3>Data Tersimpan:</h3>
-  <table id="data-table">
-    <thead><tr><th>No</th><th>Barcode</th><th>Waktu</th></tr></thead>
-    <tbody id="table-body"></tbody>
-  </table>
+  <h1>📷 Scan Barcode / QR Code</h1>
+  <video id="video" playsinline></video>
+  <p>Hasil: <span id="result">-</span></p>
+  <p id="debug"></p>
+  <footer>© 2025 Finnmircz3652222</footer>
 
   <script>
-    const scannedData = [];
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+    const videoElement = document.getElementById('video');
+    const debug = document.getElementById('debug');
+
     const webAppUrl = "https://script.google.com/macros/s/AKfycby71RymofSLqHiUforJ6rLN9q3HHjvVKMOkNWf6pRgJKBzNbE8zZmqQAgWXbsfj1aTB/exec";
 
-    function onScanSuccess(decodedText) {
-      const now = new Date().toLocaleString();
-      // Cek duplikat (opsional)
-      if (scannedData.some(item => item.code === decodedText)) return;
-
-      scannedData.push({ code: decodedText, time: now });
-      updateTable();
-      postToSheet(decodedText, now);
-    }
-
-    function updateTable() {
-      const tbody = document.getElementById("table-body");
-      tbody.innerHTML = "";
-      scannedData.forEach((item, index) => {
-        tbody.innerHTML += `<tr><td>${index + 1}</td><td>${item.code}</td><td>${item.time}</td></tr>`;
-      });
-    }
-
-    function postToSheet(code, time) {
-      fetch(webAppUrl, {
+    function kirimKeSpreadsheet(data) {
+      fetch(webAppUrl + "?barcode=" + encodeURIComponent(data), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, time })
-      }).catch(err => console.error("Gagal kirim ke Sheet:", err));
-    }
-
-    function downloadCSV() {
-      let csv = "No,Barcode,Waktu\n";
-      scannedData.forEach((item, index) => {
-        csv += `${index + 1},"${item.code}","${item.time}"\n`;
+        mode: "no-cors"
+      }).then(() => {
+        console.log("Terkirim:", data);
+      }).catch(err => {
+        console.error("Gagal kirim:", err);
+        debug.textContent = "❌ Gagal kirim data ke spreadsheet.";
       });
-      const blob = new Blob([csv], { type: "text/csv" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "hasil_scan.csv";
-      link.click();
     }
 
-    // Jalankan scanner
-    new Html5Qrcode("reader").start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      onScanSuccess
-    );
+    codeReader.listVideoInputDevices().then(devices => {
+      if (!devices.length) {
+        debug.textContent = "❌ Kamera tidak ditemukan";
+        return;
+      }
+      const camId = devices[0].deviceId;
+      codeReader.decodeFromVideoDevice(camId, videoElement, (result, err) => {
+        if (result) {
+          const text = result.text;
+          document.getElementById("result").textContent = text;
+          kirimKeSpreadsheet(text);
+        }
+      });
+    }).catch(err => {
+      console.error(err);
+      debug.textContent = "⚠️ Gagal mendeteksi kamera";
+    });
   </script>
 </body>
 </html>
