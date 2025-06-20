@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Scan Barcode</title>
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
+</head>
+<body>
+  <h2>Scan Barcode</h2>
+  <video id="video" width="300" height="200" style="border:1px solid black;"></video>
+  <p>Hasil: <span id="result">-</span></p>
+  <p id="debug" style="color:red;"></p>
+
+  <script>
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+    const videoElement = document.getElementById('video');
+    const debug = document.getElementById('debug');
+
+    const webAppUrl = "https://script.google.com/macros/s/AKfycby71RymofSLqHiUforJ6rLN9q3HHjvVKMOkNWf6pRgJKBzNbE8zZmqQAgWXbsfj1aTB/exec";
+
+    function kirimKeSpreadsheet(data) {
+      fetch(webAppUrl + "?barcode=" + encodeURIComponent(data), {
+        method: "POST",
+        mode: "no-cors"
+      }).then(() => {
+        console.log("Terkirim:", data);
+      }).catch(err => {
+        console.error("Gagal kirim:", err);
+        debug.textContent = "❌ Gagal kirim data ke spreadsheet.";
+      });
+    }
+
+    codeReader.listVideoInputDevices().then(devices => {
+      if (!devices.length) {
+        debug.textContent = "❌ Kamera tidak ditemukan";
+        return;
+      }
+      const camId = devices[0].deviceId;
+      codeReader.decodeFromVideoDevice(camId, videoElement, (result, err) => {
+        if (result) {
+          const text = result.text;
+          document.getElementById("result").textContent = text;
+          kirimKeSpreadsheet(text);
+        }
+      });
+    }).catch(err => {
+      console.error(err);
+      debug.textContent = "⚠️ Gagal mendeteksi kamera";
+    });
+  </script>
+</body>
+</html>
